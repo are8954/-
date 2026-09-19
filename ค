@@ -1,0 +1,293 @@
+-- ใส่ไว้ใน StarterPlayer -> StarterPlayerScripts (LocalScript)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- === [ ตัวแปรหลัก / SETTINGS ] ===
+local Settings = {
+	AimbotEnabled = true,
+	FOVEnabled = true,
+	FOVRadius = 150,
+	ESPEnabled = true,
+	TeamCheck = true,
+}
+
+local IsAiming = false -- เช็คสถานะการกดล็อกหัวบนมือถือ
+
+-- === [ ระบบวงกลม FOV & ESP ] ===
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1.5
+FOVCircle.Filled = false
+FOVCircle.Color = Color3.fromRGB(0, 255, 255)
+
+local ESPObjects = {}
+local function createESP(player)
+	if ESPObjects[player] then return end
+	local box = Drawing.new("Square")
+	box.Thickness = 2
+	box.Filled = false
+	box.Color = Color3.fromRGB(255, 0, 0)
+	ESPObjects[player] = box
+end
+
+local function removeESP(player)
+	if ESPObjects[player] then
+		ESPObjects[player]:Remove()
+		ESPObjects[player] = nil
+	end
+end
+
+Players.PlayerAdded:Connect(createESP)
+Players.PlayerRemoving:Connect(removeESP)
+for _, p in ipairs(Players:GetPlayers()) do
+	if p ~= LocalPlayer then createESP(p) end
+end
+
+-- === [ การสร้างหน้าต่างหน้าจอ GUI ] ===
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MobileAimbotGui"
+ScreenGui.ResetOnSpawn = false
+
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+-- หน้าต่างหลัก (Main Frame)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 220, 0, 280)
+MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
+
+-- หัวข้อเมนู (Title)
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Title.Text = "🎯 MOBILE AIMBOT"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+Title.BorderSizePixel = 0
+Title.Parent = MainFrame
+
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = Title
+
+-- ปุ่มย่อ/ขยายเมนูสำหรับมือถือ (Toggle Menu Button)
+local MenuToggleButton = Instance.new("TextButton")
+MenuToggleButton.Name = "MenuToggleButton"
+MenuToggleButton.Size = UDim2.new(0, 45, 0, 45)
+MenuToggleButton.Position = UDim2.new(0.05, 0, 0.05, 0)
+MenuToggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+MenuToggleButton.Text = "MENU"
+MenuToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+MenuToggleButton.Font = Enum.Font.SourceSansBold
+MenuToggleButton.TextSize = 12
+MenuToggleButton.Parent = ScreenGui
+
+local MenuToggleCorner = Instance.new("UICorner")
+MenuToggleCorner.CornerRadius = UDim.new(1, 0)
+MenuToggleCorner.Parent = MenuToggleButton
+
+MenuToggleButton.MouseButton1Click:Connect(function()
+	MainFrame.Visible = not MainFrame.Visible
+end)
+
+-- ปุ่มล็อกหัวหน้าจอมือถือ (Virtual Aim Button)
+local AimButton = Instance.new("TextButton")
+AimButton.Name = "AimButton"
+AimButton.Size = UDim2.new(0, 70, 0, 70)
+AimButton.Position = UDim2.new(0.75, 0, 0.5, 0)
+AimButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+AimButton.BackgroundTransparency = 0.4
+AimButton.Text = "LOCK"
+AimButton.TextColor3 = Color3.fromRGB(255, 0, 0)
+AimButton.Font = Enum.Font.SourceSansBold
+AimButton.TextSize = 18
+AimButton.Parent = ScreenGui
+
+local AimButtonCorner = Instance.new("UICorner")
+AimButtonCorner.CornerRadius = UDim.new(1, 0)
+AimButtonCorner.Parent = AimButton
+
+-- ตรวจสอบระบบสัมผัสปุ่มล็อกหัว
+AimButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		IsAiming = true
+		AimButton.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+		AimButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	end
+end)
+
+AimButton.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+		IsAiming = false
+		AimButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		AimButton.TextColor3 = Color3.fromRGB(255, 0, 0)
+	end
+end)
+
+-- ฟังก์ชันสร้างปุ่มตัวเลือกในเมนู (Toggle Items)
+local function createToggle(name, text, default, position, callback)
+	local button = Instance.new("TextButton")
+	button.Name = name
+	button.Size = UDim2.new(0.9, 0, 0, 35)
+	button.Position = position
+	button.Font = Enum.Font.SourceSans
+	button.TextSize = 16
+	button.BorderSizePixel = 0
+	button.Parent = MainFrame
+	
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 5)
+	corner.Parent = button
+
+	local state = default
+	local function updateDisplay()
+		if state then
+			button.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+			button.Text = text .. ": ON"
+		else
+			button.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+			button.Text = text .. ": OFF"
+		end
+		button.TextColor3 = Color3.fromRGB(255, 255, 255)
+	end
+	
+	button.MouseButton1Click:Connect(function()
+		state = not state
+		updateDisplay()
+		callback(state)
+	end)
+	
+	updateDisplay()
+end
+
+createToggle("AimbotToggle", "Aimbot Lock", Settings.AimbotEnabled, UDim2.new(0.05, 0, 0, 50), function(v) Settings.AimbotEnabled = v end)
+createToggle("TeamCheckToggle", "Team Check", Settings.TeamCheck, UDim2.new(0.05, 0, 0, 95), function(v) Settings.TeamCheck = v end)
+createToggle("FOVToggle", "Show FOV Circle", Settings.FOVEnabled, UDim2.new(0.05, 0, 0, 140), function(v) Settings.FOVEnabled = v end)
+createToggle("ESPToggle", "ESP Box (Enemy)", Settings.ESPEnabled, UDim2.new(0.05, 0, 0, 185), function(v) Settings.ESPEnabled = v end)
+
+-- แถบปรับ FOV
+local FOVControl = Instance.new("Frame")
+FOVControl.Size = UDim2.new(0.9, 0, 0, 35)
+FOVControl.Position = UDim2.new(0.05, 0, 0, 230)
+FOVControl.BackgroundTransparency = 1
+FOVControl.Parent = MainFrame
+
+local FOVLabel = Instance.new("TextLabel")
+FOVLabel.Size = UDim2.new(0.5, 0, 1, 0)
+FOVLabel.Text = "FOV: " .. Settings.FOVRadius
+FOVLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+FOVLabel.Font = Enum.Font.SourceSans
+FOVLabel.TextSize = 14
+FOVLabel.BackgroundTransparency = 1
+FOVLabel.Parent = FOVControl
+
+local BtnMinus = Instance.new("TextButton")
+BtnMinus.Size = UDim2.new(0.2, 0, 1, 0)
+BtnMinus.Position = UDim2.new(0.5, 0, 0, 0)
+BtnMinus.Text = "-"
+BtnMinus.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+BtnMinus.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnMinus.Parent = FOVControl
+
+local BtnPlus = Instance.new("TextButton")
+BtnPlus.Size = UDim2.new(0.2, 0, 1, 0)
+BtnPlus.Position = UDim2.new(0.75, 0, 0, 0)
+BtnPlus.Text = "+"
+BtnPlus.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+BtnPlus.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnPlus.Parent = FOVControl
+
+BtnMinus.MouseButton1Click:Connect(function()
+	Settings.FOVRadius = math.max(10, Settings.FOVRadius - 25)
+	FOVLabel.Text = "FOV: " .. Settings.FOVRadius
+end)
+
+BtnPlus.MouseButton1Click:Connect(function()
+	Settings.FOVRadius = math.min(600, Settings.FOVRadius + 25)
+	FOVLabel.Text = "FOV: " .. Settings.FOVRadius
+end)
+
+-- === [ ฟังก์ชันค้นหาเป้าหมาย ] ===
+local function getClosestPlayerToCenter()
+	local target = nil
+	local closestDistance = Settings.FOVEnabled and Settings.FOVRadius or math.huge
+	-- บนมือถือจะคำนวณจาก "กึ่งกลางหน้าจอ" เป็นหลักแทนตำแหน่งเมาส์
+	local centerPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character then
+			if Settings.TeamCheck and player.Team == LocalPlayer.Team then
+				continue
+			end
+			
+			local char = player.Character
+			local head = char:FindFirstChild("Head")
+			local humanoid = char:FindFirstChildOfClass("Humanoid")
+			
+			if head and humanoid and humanoid.Health > 0 then
+				local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
+				if onScreen then
+					local distance = (Vector2.new(screenPos.X, screenPos.Y) - centerPos).Magnitude
+					if distance < closestDistance then
+						closestDistance = distance
+						target = player
+					end
+				end
+			end
+		end
+	end
+	return target
+end
+
+-- === [ MAIN LOOP ทำงานทุกเฟรม ] ===
+RunService.RenderStepped:Connect(function()
+	local centerPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+	
+	-- ล็อกวงกลม FOV ไว้กึ่งกลางหน้าจอมือถือ
+	FOVCircle.Position = centerPos
+	FOVCircle.Visible = Settings.FOVEnabled
+	FOVCircle.Radius = Settings.FOVRadius
+	
+	-- อัปเดตกรอบ ESP
+	for player, box in pairs(ESPObjects) do
+		local isEnemy = not Settings.TeamCheck or (player.Team ~= LocalPlayer.Team)
+		
+		if Settings.ESPEnabled and isEnemy and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChildOfClass("Humanoid") and player.Character:FindFirstChildOfClass("Humanoid").Health > 0 then
+			local hrp = player.Character.HumanoidRootPart
+			local hrpPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+			
+			if onScreen then
+				local scale = 1000 / hrpPos.Z
+				box.Size = Vector2.new(scale * 2.5, scale * 3.5)
+				box.Position = Vector2.new(hrpPos.X - box.Size.X / 2, hrpPos.Y - box.Size.Y / 2)
+				box.Visible = true
+			else
+				box.Visible = false
+			end
+		else
+			box.Visible = false
+		end
+	end
+	
+	-- ทำการล็อกหัวเมื่อกดปุ่ม "LOCK" ค้างไว้บนหน้าจอ
+	if Settings.AimbotEnabled and IsAiming then
+		local target = getClosestPlayerToCenter()
+		if target and target.Character and target.Character:FindFirstChild("Head") then
+			Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
+		end
+	end
+end)
