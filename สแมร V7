@@ -1,0 +1,273 @@
+-- [[ SAMMERHUB REMASTERED (SAFE & OPTIMIZED VERSION) ]] --
+
+-- Anti-Detection: สุ่มชื่อวัตถุเพื่อหลบหลีก Anti-Cheat ที่ตรวจจับจากชื่อ UI
+local function getRandomName()
+    local chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
+    local length = math.random(8, 14)
+    local name = ""
+    for i = 1, length do
+        local rand = math.random(1, #chars)
+        name = name .. string.sub(chars, rand, rand)
+    end
+    return name
+end
+
+local Config = {
+    Aimbot = false, 
+    Smoothness = 0.05, 
+    FOVEnabled = true, 
+    FOVRadius = 120, 
+    ESPEnabled = false
+}
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+
+-- ลบ UI เก่าที่ตกค้างเพื่อเคลียร์ RAM
+for _, child in ipairs(CoreGui:GetChildren()) do
+    if child:IsA("ScreenGui") and child:GetAttribute("IsSammerHub") then
+        child:Destroy()
+    end
+end
+
+-- สร้าง UI พร้อมติดแท็กระบุตัวตนแบบสุ่ม
+local sg = Instance.new("ScreenGui")
+sg.Name = getRandomName()
+sg:SetAttribute("IsSammerHub", true)
+sg.ResetOnSpawn = false
+sg.Parent = CoreGui
+
+-- วงกลม FOV
+local fovCircle = Instance.new("Frame", sg)
+fovCircle.Name = getRandomName()
+fovCircle.BackgroundTransparency = 1
+fovCircle.Size = UDim2.fromOffset(Config.FOVRadius * 2, Config.FOVRadius * 2)
+fovCircle.Position = UDim2.new(0.5, -Config.FOVRadius, 0.5, -Config.FOVRadius)
+
+local fovCorner = Instance.new("UICorner", fovCircle)
+fovCorner.CornerRadius = UDim.new(1, 0)
+
+local fovStroke = Instance.new("UIStroke", fovCircle)
+fovStroke.Thickness = 1.5
+fovStroke.Color = Color3.fromRGB(255, 255, 255)
+fovStroke.Transparency = 0.4
+
+-- ตัวจำลองทิศทางกล้องแบบปลอดภัย
+local camAtt = Instance.new("Attachment")
+camAtt.Name = getRandomName()
+camAtt.Parent = workspace.Terrain
+
+-- โมเดิร์น Raycast: ระบบตรวจสอบการมองเห็นเวอร์ชันใหม่ (ไม่แลค)
+local function IsVisible(part)
+    if not part then return false end
+    local origin = Camera.CFrame.Position
+    local direction = part.Position - origin
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    raycastParams.IgnoreWater = true
+    
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    if result then
+        return result.Instance:IsDescendantOf(part.Parent)
+    end
+    return true
+end
+
+local function GetDeagleTarget(model)
+    if not model then return nil end
+    return model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+end
+
+-- ระบบค้นหาเป้าหมายแบบ Optimize
+local currentTarget = nil
+local function UpdateTarget()
+    local target, maxDist = nil, Config.FOVRadius
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local char = p.Character
+            local head = GetDeagleTarget(char)
+            if head and IsVisible(head) then
+                local pos, screen = Camera:WorldToViewportPoint(head.Position)
+                if screen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist < maxDist then
+                        maxDist = dist
+                        target = head
+                    end
+                end
+            end
+        end
+    end
+    currentTarget = target
+end
+
+-- แยกลูปการหาเป้าหมายออกเป็น 0.1 วินาที เพื่อไม่ให้เครื่องกระตุก
+task.spawn(function()
+    while task.wait(0.1) do
+        if Config.Aimbot or Config.ESPEnabled then
+            UpdateTarget()
+        end
+    end
+end)
+
+-- เมนูหลัก GUI
+local btn = Instance.new("TextButton", sg)
+btn.Size = UDim2.new(0, 95, 0, 35)
+btn.Position = UDim2.new(0.05, 0, 0.25, 0)
+btn.BackgroundColor3 = Color3.fromRGB(235, 94, 40)
+btn.Text = "SammerHuB V6"
+btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+btn.Font = Enum.Font.SourceSansBold
+btn.TextSize = 14
+Instance.new("UICorner", btn)
+
+local frame = Instance.new("Frame", sg)
+frame.Size = UDim2.new(0, 360, 0, 200)
+frame.Position = UDim2.new(0.3, 0, 0.2, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.Visible = true
+frame.Active = true
+frame.Draggable = true
+Instance.new("UICorner", frame)
+
+local tl = Instance.new("TextLabel", frame)
+tl.Size = UDim2.new(1, 0, 0, 35)
+tl.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+tl.Text = "  SAMMERHUB BEAM OPTIMIZED"
+tl.TextColor3 = Color3.fromRGB(255, 255, 255)
+tl.TextXAlignment = Enum.TextXAlignment.Left
+tl.Font = Enum.Font.SourceSansBold
+tl.TextSize = 14
+Instance.new("UICorner", tl)
+
+local t1 = Instance.new("TextButton", frame)
+t1.Size = UDim2.new(0, 150, 0, 35)
+t1.Position = UDim2.new(0.05, 0, 0.35, 0)
+t1.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+t1.Text = "Aimbot: OFF"
+t1.TextColor3 = Color3.fromRGB(255, 255, 255)
+t1.Font = Enum.Font.SourceSansBold
+t1.TextSize = 14
+t1.MouseButton1Click:Connect(function()
+    Config.Aimbot = not Config.Aimbot
+    t1.BackgroundColor3 = Config.Aimbot and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
+    t1.Text = Config.Aimbot and "Aimbot: ON" or "Aimbot: OFF"
+end)
+
+local t2 = Instance.new("TextButton", frame)
+t2.Size = UDim2.new(0, 150, 0, 35)
+t2.Position = UDim2.new(0.53, 0, 0.35, 0)
+t2.BackgroundColor3 = Color3.fromRGB(150, 40, 40)
+t2.Text = "ESP Wall: OFF"
+t2.TextColor3 = Color3.fromRGB(255, 255, 255)
+t2.Font = Enum.Font.SourceSansBold
+t2.TextSize = 14
+t2.MouseButton1Click:Connect(function()
+    Config.ESPEnabled = not Config.ESPEnabled
+    t2.BackgroundColor3 = Config.ESPEnabled and Color3.fromRGB(40, 150, 40) or Color3.fromRGB(150, 40, 40)
+    t2.Text = Config.ESPEnabled and "ESP Wall: ON" or "ESP Wall: OFF"
+end)
+
+local inp = Instance.new("TextBox", frame)
+inp.Size = UDim2.new(0, 150, 0, 35)
+inp.Position = UDim2.new(0.05, 0, 0.65, 0)
+inp.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+inp.Text = "Smooth: 0.05"
+inp.TextColor3 = Color3.fromRGB(255, 255, 255)
+inp.Font = Enum.Font.SourceSans
+inp.TextSize = 13
+inp.FocusLost:Connect(function()
+    local v = tonumber(inp.Text:match("[%d%.]+"))
+    if v then 
+        Config.Smoothness = math.clamp(v, 0.001, 1) 
+        inp.Text = "Smooth: "..tostring(Config.Smoothness)
+    end
+end)
+
+local inpFov = Instance.new("TextBox", frame)
+inpFov.Size = UDim2.new(0, 150, 0, 35)
+inpFov.Position = UDim2.new(0.53, 0, 0.65, 0)
+inpFov.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+inpFov.Text = "FOV: 120"
+inpFov.TextColor3 = Color3.fromRGB(255, 255, 255)
+inpFov.Font = Enum.Font.SourceSans
+inpFov.TextSize = 13
+inpFov.FocusLost:Connect(function()
+    local v = tonumber(inpFov.Text:match("%d+"))
+    if v then 
+        Config.FOVRadius = math.clamp(v, 20, 400) 
+        fovCircle.Size = UDim2.fromOffset(Config.FOVRadius * 2, Config.FOVRadius * 2)
+        fovCircle.Position = UDim2.new(0.5, -Config.FOVRadius, 0.5, -Config.FOVRadius)
+        inpFov.Text = "FOV: "..tostring(Config.FOVRadius)
+    end
+end)
+
+btn.MouseButton1Click:Connect(function() frame.Visible = not frame.Visible end)
+
+-- ลูปการวาดภาพ Render และการล็อกเป้า (นุ่มนวลขึ้น)
+RunService.RenderStepped:Connect(function()
+    fovCircle.Visible = Config.FOVEnabled
+    
+    if Config.Aimbot and currentTarget then
+        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, currentTarget.Position), Config.Smoothness)
+    end
+    
+    camAtt.WorldPosition = Camera.CFrame.Position + (Camera.CFrame.LookVector * 2) - (Camera.CFrame.UpVector * 1)
+    
+    -- ทำการวาด ESP เฉพาะผู้เล่นที่กำลังเปิดระบบอยู่เพื่อความเสถียร
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character then
+            local char = p.Character
+            local root = GetDeagleTarget(char)
+            if root then
+                local bb = char:FindFirstChild("SH_ESP")
+                local beam = char:FindFirstChild("SH_Beam")
+                local tAtt = root:FindFirstChild("SH_Att")
+                
+                if Config.ESPEnabled then
+                    if not bb then
+                        bb = Instance.new("BillboardGui", char)
+                        bb.Name = "SH_ESP"
+                        bb.AlwaysOnTop = true
+                        bb.Size = UDim2.new(4, 0, 5, 0)
+                        bb.Adornee = root
+                        local f = Instance.new("Frame", bb)
+                        f.Size = UDim2.new(1, 0, 1, 0)
+                        f.BackgroundTransparency = 1
+                        local s = Instance.new("UIStroke", f)
+                        s.Thickness = 1.5
+                        s.Color = Color3.fromRGB(255, 50, 50)
+                    end
+                    bb.Enabled = true
+                    
+                    if not tAtt then
+                        tAtt = Instance.new("Attachment", root)
+                        tAtt.Name = "SH_Att"
+                    end
+                    
+                    if not beam then
+                        beam = Instance.new("Beam", char)
+                        beam.Name = "SH_Beam"
+                        beam.Width0 = 0.03
+                        beam.Width1 = 0.03
+                        beam.Color = ColorSequence.new(Color3.fromRGB(255, 50, 50))
+                        beam.FaceCamera = true
+                        beam.Attachment0 = camAtt
+                        beam.Attachment1 = tAtt
+                    end
+                    beam.Enabled = true
+                else
+                    if bb then bb.Enabled = false end
+                    if beam then beam.Enabled = false end
+                end
+            end
+        end
+    end
+end)
